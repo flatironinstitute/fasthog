@@ -18,11 +18,35 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
 
     const double half_bin = 180.0 / n_bins;
     const double inv_bin_size = n_bins / 360.0;
-    double bin_centers[n_bins + 2];
-    bin_centers[0] = -half_bin;
-    for (int i = 1; i < n_bins + 2; ++i)
+    double bin_centers[n_bins + 1];
+    bin_centers[0] = half_bin;
+    for (int i = 1; i < n_bins + 1; ++i)
         bin_centers[i] = bin_centers[i - 1] + 2 * half_bin;
 
+    for (int y = 0; y < ncols; ++y) {
+        const int y_cell = y / rows_per_cell;
+        for (int x = 0; x < nrows; ++x) {
+            const int x_cell = x / cols_per_cell;
+            const int hist_offset = y_cell * n_cells_x * n_bins + x_cell * n_bins;
+
+            const double angle = orientation[y * ncols + x];
+            const double mag = magnitude[y * ncols + x];
+            int high_bin = inv_bin_size * (angle + half_bin);
+            int low_bin = high_bin - 1;
+            double high_center = bin_centers[high_bin];
+            if (high_bin == 0) {
+                low_bin = n_bins - 1;
+                high_bin = 0;
+            }
+
+            const double high_vote = inv_bin_size * (high_center - angle);
+            const double low_vote = 1 - high_vote;
+
+            res[hist_offset + low_bin] = mag * low_vote;
+            res[hist_offset + high_bin] = mag * high_vote;
+        }
+    }
+    
     for (int y_cell = 0; y_cell < n_cells_y; ++y_cell) {
         const int y_start = y_cell * rows_per_cell;
         const int y_end = y_start + rows_per_cell;
@@ -32,26 +56,8 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
             const int hist_offset = y_cell * n_cells_x * n_bins + x_cell * n_bins;
 
             double norm_factor = 0.0;
-            for (int y = y_start; y < y_end; ++y) {
-                for (int x = x_start; x < x_end; ++x) {
-                    double angle = orientation[y*ncols + x];
-                    double mag = magnitude[y*ncols + x];
-                    int low_bin = inv_bin_size * (angle - half_bin);
-                    int high_bin = low_bin + 1;
-                    double low_center = bin_centers[low_bin + 1];
-                    double high_center = bin_centers[high_bin + 1];
-                    if (angle - half_bin < 0) {
-                        low_bin = n_bins - 1;
-                        low_center = bin_centers[0];
-                    }
-                    if (high_bin > n_bins - 1)
-                        high_bin = 0;
-
-                    res[hist_offset + low_bin] = mag * inv_bin_size * (angle - low_center);
-                    res[hist_offset + high_bin] = mag * inv_bin_size * (high_center - angle);
-                    norm_factor += mag;
-                }
-            }
+            for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+                norm_factor += res[hist_offset + i_bin];
 
             norm_factor = 1.0 / sqrt(norm_factor * norm_factor + eps);
             double norm_factor2 = 0.0;
