@@ -109,10 +109,16 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
     const int N = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
     const int n_cells_y = nrows / cell_size_x;
-    double gx[N], gy[N], magnitude[N], orientation[N];
+    double *mempool = (double*) malloc(4*N*sizeof(double));
+    double *gx = mempool + 0 * N;
+    double *gy = mempool + 1 * N;
+    double *magnitude = mempool + 2 * N;
+    double *orientation = mempool + 3 * N;
+
     gradient(img, nrows, ncols, gx, gy);
     magnitude_orientation(gx, gy, N, magnitude, orientation);
     memset(hist, 0, n_cells_x * n_cells_y * n_bins * sizeof(double));
     build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins, hist);
+    free(mempool);
 }
 }
