@@ -52,11 +52,12 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
             int high_bin = angle + 0.5;
             int low_bin = high_bin - 1;
 
-            if (high_bin == 0)
-                low_bin = n_bins - 1;
-
             const double low_vote = mag * (high_bin + 0.5 - angle);
             const double high_vote = mag - low_vote;
+            if (high_bin < 1)
+                low_bin = n_bins - 1;
+            if (high_bin >= n_bins)
+                high_bin = 0;
 
             hist[hist_offset + low_bin] += low_vote;
             hist[hist_offset + high_bin] += high_vote;
