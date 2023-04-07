@@ -42,8 +42,8 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
             const double high_vote = inv_bin_size * (high_center - angle);
             const double low_vote = 1 - high_vote;
 
-            res[hist_offset + low_bin] = mag * low_vote;
-            res[hist_offset + high_bin] = mag * high_vote;
+            res[hist_offset + low_bin] += mag * low_vote;
+            res[hist_offset + high_bin] += mag * high_vote;
         }
     }
     
