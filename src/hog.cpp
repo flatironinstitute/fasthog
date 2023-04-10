@@ -8,7 +8,7 @@
 #include <afvec/vectorclass.h>
 #include <afvec/vectormath_trig.h>
 
-static const double eps = 1E-7;
+constexpr double eps2 = 1E-14;
 
 void normalize_histogram(double *hist, int n_cells_x, int n_cells_y, int n_bins) {
     for (int i_cell = 0; i_cell < n_cells_x * n_cells_y; ++i_cell) {
@@ -16,19 +16,19 @@ void normalize_histogram(double *hist, int n_cells_x, int n_cells_y, int n_bins)
 
         double norm_factor = 0.0;
         for (int i_bin = 0; i_bin < n_bins; ++i_bin)
-            norm_factor += hist[hist_offset + i_bin];
+            norm_factor += hist[hist_offset + i_bin] * hist[hist_offset + i_bin];
         if (!norm_factor)
             continue;
 
-        norm_factor = 1.0 / sqrt(norm_factor * norm_factor + eps);
+        norm_factor = 1.0 / sqrt(norm_factor + eps2);
         double norm_factor2 = 0.0;
         for (int i_bin = 0; i_bin < n_bins; ++i_bin) {
             hist[hist_offset + i_bin] *= norm_factor;
             hist[hist_offset + i_bin] = std::min(0.2, hist[hist_offset + i_bin]);
-            norm_factor2 += hist[hist_offset + i_bin];
+            norm_factor2 += hist[hist_offset + i_bin] * hist[hist_offset + i_bin];
         }
 
-        norm_factor2 = 1.0 / sqrt(norm_factor2 * norm_factor2 + eps);
+        norm_factor2 = 1.0 / sqrt(norm_factor2 + eps2);
         for (int i_bin = 0; i_bin < n_bins; ++i_bin)
             hist[hist_offset + i_bin] *= norm_factor2;
     }
