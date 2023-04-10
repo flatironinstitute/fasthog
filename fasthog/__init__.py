@@ -91,15 +91,15 @@ def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
     n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
     n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
     res = _np.empty((n_blocks_y, n_blocks_x, n_bins))
-    hog(img.ctypes.data_as(_POINTER(_c_double)),
-        img.shape[1],
-        img.shape[0],
-        cell_size[0],
-        cell_size[1],
-        cells_per_block[0],
-        cells_per_block[1],
-        n_bins,
-        res.ctypes.data_as(_POINTER(_c_double)))
+    _hog(img.ctypes.data_as(_POINTER(_c_double)),
+         img.shape[1],
+         img.shape[0],
+         cell_size[0],
+         cell_size[1],
+         cells_per_block[0],
+         cells_per_block[1],
+         n_bins,
+         res.ctypes.data_as(_POINTER(_c_double)))
     return res
 
 
@@ -137,14 +137,14 @@ def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9
     n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
     n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
     res = _np.empty((n_blocks_y, n_blocks_x, n_bins))
-    hog(gx.ctypes.data_as(_POINTER(_c_double)),
-        gy.ctypes.data_as(_POINTER(_c_double)),
-        gx.shape[1],
-        gx.shape[0],
-        cell_size[0],
-        cell_size[1],
-        cells_per_block[0],
-        cells_per_block[1],
-        n_bins,
-        res.ctypes.data_as(_POINTER(_c_double)))
+    _hog_from_gradient(gx.ctypes.data_as(_POINTER(_c_double)),
+                       gy.ctypes.data_as(_POINTER(_c_double)),
+                       gx.shape[1],
+                       gx.shape[0],
+                       cell_size[0],
+                       cell_size[1],
+                       cells_per_block[0],
+                       cells_per_block[1],
+                       n_bins,
+                       res.ctypes.data_as(_POINTER(_c_double)))
     return res
