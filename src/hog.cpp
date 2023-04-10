@@ -10,27 +10,41 @@
 
 constexpr double eps2 = 1E-14;
 
-void normalize_histogram(double *hist, int n_cells_x, int n_cells_y, int n_bins) {
-    for (int i_cell = 0; i_cell < n_cells_x * n_cells_y; ++i_cell) {
-        const int hist_offset = i_cell * n_bins;
+void normalize_histogram(const double *unblocked, int n_cells_x, int n_cells_y, int block_size_x, int block_size_y,
+                         int n_bins, double *__restrict__ hist) {
+    const int n_blocks_x =(n_cells_x - block_size_x + 1);
+    const int n_blocks_y = (n_cells_y - block_size_y + 1);
+    memset(hist, 0, n_blocks_x * n_blocks_y * n_bins * sizeof(double));
 
-        double norm_factor = 0.0;
-        for (int i_bin = 0; i_bin < n_bins; ++i_bin)
-            norm_factor += hist[hist_offset + i_bin] * hist[hist_offset + i_bin];
-        if (!norm_factor)
-            continue;
+    for (int y_block = 0; y_block < n_blocks_y; ++y_block) {
+        for (int x_block = 0; x_block < n_blocks_x; ++x_block) {
+            double *block = hist + y_block * n_blocks_x * n_bins + x_block * n_bins;
+            for (int y_cell = y_block * block_size_y; y_cell < (y_block + 1) * block_size_y; ++y_cell) {
+                for (int x_cell = x_block * block_size_x; x_cell < (x_block + 1) * block_size_x; ++x_cell) {
+                    const double *cell = unblocked + (y_cell * n_cells_x + x_cell) * n_bins;
+                    for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+                        block[i_bin] += cell[i_bin];
+                }
+            }
 
-        norm_factor = 1.0 / sqrt(norm_factor + eps2);
-        double norm_factor2 = 0.0;
-        for (int i_bin = 0; i_bin < n_bins; ++i_bin) {
-            hist[hist_offset + i_bin] *= norm_factor;
-            hist[hist_offset + i_bin] = std::min(0.2, hist[hist_offset + i_bin]);
-            norm_factor2 += hist[hist_offset + i_bin] * hist[hist_offset + i_bin];
+            double norm_factor = 0.0;
+            for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+                norm_factor += block[i_bin] * block[i_bin];
+            if (!norm_factor)
+                continue;
+
+            norm_factor = 1.0 / sqrt(norm_factor + eps2);
+            double norm_factor2 = 0.0;
+            for (int i_bin = 0; i_bin < n_bins; ++i_bin) {
+                block[i_bin] *= norm_factor;
+                block[i_bin] = std::min(0.2, block[i_bin]);
+                norm_factor2 += block[i_bin] * block[i_bin];
+            }
+
+            norm_factor2 = 1.0 / sqrt(norm_factor2 + eps2);
+            for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+                block[i_bin] *= norm_factor2;
         }
-
-        norm_factor2 = 1.0 / sqrt(norm_factor2 + eps2);
-        for (int i_bin = 0; i_bin < n_bins; ++i_bin)
-            hist[hist_offset + i_bin] *= norm_factor2;
     }
 }
 
@@ -38,6 +52,7 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
                      int cols_per_cell, int n_bins, double *hist) {
     const int n_cells_y = nrows / rows_per_cell;
     const int n_cells_x = ncols / cols_per_cell;
+    memset(hist, 0, n_cells_x * n_cells_y * n_bins * sizeof(double));
 
     for (int y = 0; y < ncols; ++y) {
         const int y_cell = y / rows_per_cell;
@@ -63,7 +78,6 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
         }
     }
 
-    normalize_histogram(hist, n_cells_x, n_cells_y, n_bins);
 }
 
 void magnitude_orientation(const double *gx, const double *gy, int N, int n_bins, double *magnitude,
@@ -100,20 +114,28 @@ void gradient(const double *img, int nrows, int ncols, double *gx, double *gy) {
 }
 
 extern "C" {
-void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int n_bins, double *hist) {
-    const int N = nrows * ncols;
+void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int block_size_x, int block_size_y,
+         int n_bins, double *hist) {
+    const int N_pixels = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
     const int n_cells_y = nrows / cell_size_x;
-    double *mempool = new double[4 * N];
-    double *gx = mempool + 0 * N;
-    double *gy = mempool + 1 * N;
-    double *magnitude = mempool + 2 * N;
-    double *orientation = mempool + 3 * N;
+    const int N_cells = n_cells_x * n_cells_y;
+    const int n_blocks_x = (n_cells_x - block_size_x) + 1;
+    const int n_blocks_y = (n_cells_y - block_size_y) + 1;
+    double *mempool = new double[4 * N_pixels + N_cells * n_bins];
+    double *gx = mempool + 0 * N_pixels;
+    double *gy = mempool + 1 * N_pixels;
+    double *magnitude = mempool + 2 * N_pixels;
+    double *orientation = mempool + 3 * N_pixels;
+    double *unblocked_hist = mempool + 4 * N_pixels;
 
     gradient(img, nrows, ncols, gx, gy);
-    magnitude_orientation(gx, gy, N, n_bins, magnitude, orientation);
-    memset(hist, 0, n_cells_x * n_cells_y * n_bins * sizeof(double));
-    build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins, hist);
+    magnitude_orientation(gx, gy, N_pixels, n_bins, magnitude, orientation);
+    build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins,
+                    unblocked_hist);
+
+    normalize_histogram(unblocked_hist, n_cells_x, n_cells_y, block_size_x, block_size_y, n_bins, hist);
+
     delete[] mempool;
 }
 }
