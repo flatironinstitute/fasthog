@@ -10,28 +10,27 @@
 
 static const double eps = 1E-7;
 
-extern "C" {
 void normalize_histogram(double *hist, int n_cells_x, int n_cells_y, int n_bins) {
-    for (int y_cell = 0; y_cell < n_cells_y; ++y_cell) {
-        for (int x_cell = 0; x_cell < n_cells_x; ++x_cell) {
-            const int hist_offset = y_cell * n_cells_x * n_bins + x_cell * n_bins;
+    for (int i_cell = 0; i_cell < n_cells_x * n_cells_y; ++i_cell) {
+        const int hist_offset = i_cell * n_bins;
 
-            double norm_factor = 0.0;
-            for (int i_bin = 0; i_bin < n_bins; ++i_bin)
-                norm_factor += hist[hist_offset + i_bin];
+        double norm_factor = 0.0;
+        for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+            norm_factor += hist[hist_offset + i_bin];
+        if (!norm_factor)
+            continue;
 
-            norm_factor = 1.0 / sqrt(norm_factor * norm_factor + eps);
-            double norm_factor2 = 0.0;
-            for (int i_bin = 0; i_bin < n_bins; ++i_bin) {
-                hist[hist_offset + i_bin] *= norm_factor;
-                hist[hist_offset + i_bin] = std::min(0.2, hist[hist_offset + i_bin]);
-                norm_factor2 += hist[hist_offset + i_bin];
-            }
-
-            norm_factor2 = 1.0 / sqrt(norm_factor2 * norm_factor2 + eps);
-            for (int i_bin = 0; i_bin < n_bins; ++i_bin)
-                hist[hist_offset + i_bin] *= norm_factor2;
+        norm_factor = 1.0 / sqrt(norm_factor * norm_factor + eps);
+        double norm_factor2 = 0.0;
+        for (int i_bin = 0; i_bin < n_bins; ++i_bin) {
+            hist[hist_offset + i_bin] *= norm_factor;
+            hist[hist_offset + i_bin] = std::min(0.2, hist[hist_offset + i_bin]);
+            norm_factor2 += hist[hist_offset + i_bin];
         }
+
+        norm_factor2 = 1.0 / sqrt(norm_factor2 * norm_factor2 + eps);
+        for (int i_bin = 0; i_bin < n_bins; ++i_bin)
+            hist[hist_offset + i_bin] *= norm_factor2;
     }
 }
 
@@ -100,11 +99,12 @@ void gradient(const double *img, int nrows, int ncols, double *gx, double *gy) {
     }
 }
 
+extern "C" {
 void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int n_bins, double *hist) {
     const int N = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
     const int n_cells_y = nrows / cell_size_x;
-    double *mempool = (double *)malloc(4 * N * sizeof(double));
+    double *mempool = new double[4 * N];
     double *gx = mempool + 0 * N;
     double *gy = mempool + 1 * N;
     double *magnitude = mempool + 2 * N;
@@ -114,6 +114,6 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
     magnitude_orientation(gx, gy, N, n_bins, magnitude, orientation);
     memset(hist, 0, n_cells_x * n_cells_y * n_bins * sizeof(double));
     build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins, hist);
-    free(mempool);
+    delete[] mempool;
 }
 }
