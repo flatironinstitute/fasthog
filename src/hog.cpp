@@ -118,7 +118,7 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
          int n_bins, double *hist) {
     const int N_pixels = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
-    const int n_cells_y = nrows / cell_size_x;
+    const int n_cells_y = nrows / cell_size_y;
     const int N_cells = n_cells_x * n_cells_y;
     const int n_blocks_x = (n_cells_x - block_size_x) + 1;
     const int n_blocks_y = (n_cells_y - block_size_y) + 1;
