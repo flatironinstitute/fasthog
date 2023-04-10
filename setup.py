@@ -14,7 +14,7 @@ setup(name='fasthog',
       author_email='rblackwell@flatironinstitute.org',
       url='https://github.com/blackwer/fasthog',
       packages=['fasthog'],
-      package_dir={'baobzi': 'fasthog'},
+      package_dir={'fasthog': 'fasthog'},
       install_requires=['numpy'],
       cmake_args=['-DCMAKE_BUILD_TYPE=Release'],
       )
