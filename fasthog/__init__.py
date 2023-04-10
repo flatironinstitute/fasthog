@@ -43,6 +43,21 @@ _hog.argtypes = [
     _POINTER(_c_double)
 ]
 
+_hog_from_gradient = _libhog.hog_from_gradient
+_hog_from_gradient.restype = _c_void_p
+_hog_from_gradient.argtypes = [
+    _POINTER(_c_double),
+    _POINTER(_c_double),
+    _c_int,
+    _c_int,
+    _c_int,
+    _c_int,
+    _c_int,
+    _c_int,
+    _c_int,
+    _POINTER(_c_double)
+]
+
 
 def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
     """
@@ -79,6 +94,53 @@ def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
     hog(img.ctypes.data_as(_POINTER(_c_double)),
         img.shape[1],
         img.shape[0],
+        cell_size[0],
+        cell_size[1],
+        cells_per_block[0],
+        cells_per_block[1],
+        n_bins,
+        res.ctypes.data_as(_POINTER(_c_double)))
+    return res
+
+
+def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
+    """
+    Signed histogram of oriented gradients given the gradient of the image.
+
+    https://en.wikipedia.org/wiki/Histogram_of_oriented_gradients
+
+    Parameters
+    ----------
+    gx: 2D ndarray dtype=np.float64
+         gradient of image w.r.t. x
+    gy: 2D ndarray dtype=np.float64
+         gradient of image w.r.t. y
+    cell_size: (int, int)
+         Cell size in pixels (n_pixels_per_cell_x, n_pixels_per_cell_y). Default: (8, 8).
+    cells_per_block: (int, int)
+         Number of cells for the block normalization. Default: (2, 2)
+    n_bins: int
+         Number of bins to histogram orientations. Default: 9.
+
+    Returns
+    -------
+    np.ndarray((n_blocks_x, n_blocks_y, n_bins), dtype=np.float64)
+         Hog descriptor for image. Right/bottom sides of image are truncated if image is not an integer
+         multiple of the cell size. I.e.
+         n_cells_x = img.shape[1] // cell_size[1]
+         n_cells_y = img.shape[0] // cell_size[0]
+         n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
+         n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
+    """
+    n_cells_x = gx.shape[1] // cell_size[1]
+    n_cells_y = gx.shape[0] // cell_size[0]
+    n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
+    n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
+    res = _np.empty((n_blocks_y, n_blocks_x, n_bins))
+    hog(gx.ctypes.data_as(_POINTER(_c_double)),
+        gy.ctypes.data_as(_POINTER(_c_double)),
+        gx.shape[1],
+        gx.shape[0],
         cell_size[0],
         cell_size[1],
         cells_per_block[0],

@@ -138,4 +138,24 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
 
     delete[] mempool;
 }
+
+void hog_from_gradient(const double *gx, const double *gy, int ncols, int nrows, int cell_size_x, int cell_size_y,
+                       int block_size_x, int block_size_y, int n_bins, double *hist) {
+    const int N_pixels = nrows * ncols;
+    const int n_cells_x = ncols / cell_size_x;
+    const int n_cells_y = nrows / cell_size_y;
+    const int N_cells = n_cells_x * n_cells_y;
+    const int n_blocks_x = (n_cells_x - block_size_x) + 1;
+    const int n_blocks_y = (n_cells_y - block_size_y) + 1;
+    double *mempool = new double[2 * N_pixels + N_cells * n_bins];
+    double *magnitude = mempool + 0 * N_pixels;
+    double *orientation = mempool + 1 * N_pixels;
+    double *unblocked_hist = mempool + 2 * N_pixels;
+
+    magnitude_orientation(gx, gy, N_pixels, n_bins, magnitude, orientation);
+    build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins, unblocked_hist);
+    normalize_histogram(unblocked_hist, n_cells_x, n_cells_y, block_size_x, block_size_y, n_bins, hist);
+
+    delete[] mempool;
+}
 }
