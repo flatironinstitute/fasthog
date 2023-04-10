@@ -19,8 +19,8 @@ void normalize_histogram(const double *unblocked, int n_cells_x, int n_cells_y, 
     for (int y_block = 0; y_block < n_blocks_y; ++y_block) {
         for (int x_block = 0; x_block < n_blocks_x; ++x_block) {
             double *block = hist + y_block * n_blocks_x * n_bins + x_block * n_bins;
-            for (int y_cell = y_block * block_size_y; y_cell < (y_block + 1) * block_size_y; ++y_cell) {
-                for (int x_cell = x_block * block_size_x; x_cell < (x_block + 1) * block_size_x; ++x_cell) {
+            for (int y_cell = y_block; y_cell < y_block + block_size_y; ++y_cell) {
+                for (int x_cell = x_block; x_cell < x_block + block_size_x; ++x_cell) {
                     const double *cell = unblocked + (y_cell * n_cells_x + x_cell) * n_bins;
                     for (int i_bin = 0; i_bin < n_bins; ++i_bin)
                         block[i_bin] += cell[i_bin];
