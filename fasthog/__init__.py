@@ -1,5 +1,6 @@
 """Reasonably fast implementation of Histogram of Oriented Gradients."""
-from ctypes import (CDLL as _CDLL, POINTER as _POINTER, c_double as _c_double, c_void_p as _c_void_p, c_int as _c_int)
+from ctypes import (CDLL as _CDLL, POINTER as _POINTER, c_double as _c_double,
+                    c_void_p as _c_void_p, c_int as _c_int, c_bool as _c_bool)
 from ctypes.util import find_library as _find_library
 import numpy as _np
 
@@ -40,6 +41,8 @@ _hog.argtypes = [
     _c_int,
     _c_int,
     _c_int,
+    _c_bool,
+    _c_int,
     _POINTER(_c_double)
 ]
 
@@ -55,11 +58,21 @@ _hog_from_gradient.argtypes = [
     _c_int,
     _c_int,
     _c_int,
+    _c_bool,
+    _c_int,
     _POINTER(_c_double)
 ]
 
+_norms = {
+    'none': 0,
+    'l1': 1,
+    'l1_sqrt': 2,
+    'l2': 3,
+    'l2-hys': 4,
+}
 
-def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
+
+def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9, signed=True, norm_type='L2-Hys'):
     """
     Signed histogram of oriented gradients for a given image.
 
@@ -75,6 +88,21 @@ def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
          Number of cells for the block normalization. Default: (2, 2)
     n_bins: int
          Number of bins to histogram orientations. Default: 9.
+    signed: bool
+         Use signed gradient (0-360) rather than unsigned (0-180). Default: True
+    norm_type: str
+        'None'
+           Don't normalize blocks
+        'L1'
+           Normalization using L1-norm.
+        'L1-sqrt'
+           Normalization using L1-norm, followed by square root.
+        'L2'
+           Normalization using L2-norm.
+        'L2-Hys'
+           Normalization using L2-norm, followed by limiting the
+           maximum values to 0.2 (`Hys` stands for `hysteresis`) and
+           renormalization using L2-norm. (default)
 
     Returns
     -------
@@ -86,6 +114,11 @@ def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
          n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
          n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
     """
+    norm_type = norm_type.lower()
+    norm_index = _norms.get(norm_type, None)
+    if norm_index is None:
+        print(f"Invalid norm type for hog: {norm_type}")
+        return None
     n_cells_x = img.shape[1] // cell_size[1]
     n_cells_y = img.shape[0] // cell_size[0]
     n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
@@ -99,11 +132,13 @@ def hog(img, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
          cells_per_block[0],
          cells_per_block[1],
          n_bins,
+         signed,
+         norm_index,
          res.ctypes.data_as(_POINTER(_c_double)))
     return res
 
 
-def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9):
+def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9, signed=True, norm_type='L2-Hys'):
     """
     Signed histogram of oriented gradients given the gradient of the image.
 
@@ -121,6 +156,22 @@ def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9
          Number of cells for the block normalization. Default: (2, 2)
     n_bins: int
          Number of bins to histogram orientations. Default: 9.
+    signed: bool
+         Use signed gradient (0-360) rather than unsigned (0-180). Default: True
+    norm_type: str
+        'None'
+           Don't normalize blocks
+        'L1'
+           Normalization using L1-norm.
+        'L1-sqrt'
+           Normalization using L1-norm, followed by square root.
+        'L2'
+           Normalization using L2-norm.
+        'L2-Hys'
+           Normalization using L2-norm, followed by limiting the
+           maximum values to 0.2 (`Hys` stands for `hysteresis`) and
+           renormalization using L2-norm. (default)
+
 
     Returns
     -------
@@ -136,6 +187,12 @@ def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9
     n_cells_y = gx.shape[0] // cell_size[0]
     n_blocks_y = (n_cells_y - cells_per_block[1]) + 1
     n_blocks_x = (n_cells_x - cells_per_block[0]) + 1
+    norm_type = norm_type.lower()
+    norm_index = _norms.get(norm_type, None)
+    if norm_index is None:
+        print(f"Invalid norm type for hog: {norm_type}")
+        return None
+
     res = _np.empty((n_blocks_y, n_blocks_x, n_bins))
     _hog_from_gradient(gx.ctypes.data_as(_POINTER(_c_double)),
                        gy.ctypes.data_as(_POINTER(_c_double)),
@@ -146,5 +203,7 @@ def hog_from_gradient(gx, gy, cell_size=(8, 8), cells_per_block=(2, 2), n_bins=9
                        cells_per_block[0],
                        cells_per_block[1],
                        n_bins,
+                       signed,
+                       norm_index,
                        res.ctypes.data_as(_POINTER(_c_double)))
     return res
