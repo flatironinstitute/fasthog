@@ -103,7 +103,6 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
     const int n_cells_y = nrows / rows_per_cell;
     const int n_cells_x = ncols / cols_per_cell;
     memset(hist, 0, n_cells_x * n_cells_y * n_bins * sizeof(double));
-    constexpr bool interp = false;
 
     for (int y = 0; y < ncols; ++y) {
         const int y_cell = y / rows_per_cell;
@@ -114,23 +113,18 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
 
             const double angle = orientation[y * ncols + x];
             const double mag = magnitude[y * ncols + x];
-            if (interp) {
-                int high_bin = angle + 0.5;
-                int low_bin = high_bin - 1;
+            int high_bin = angle + 0.5;
+            int low_bin = high_bin - 1;
 
-                const double low_vote = mag * (high_bin + 0.5 - angle);
-                const double high_vote = mag - low_vote;
-                if (high_bin < 1)
-                    low_bin = n_bins - 1;
-                if (high_bin >= n_bins)
-                    high_bin = 0;
+            const double low_vote = mag * (high_bin + 0.5 - angle);
+            const double high_vote = mag - low_vote;
+            if (high_bin < 1)
+                low_bin = n_bins - 1;
+            if (high_bin >= n_bins)
+                high_bin = 0;
 
-                hist[hist_offset + low_bin] += low_vote;
-                hist[hist_offset + high_bin] += high_vote;
-            } else {
-                int bin = angle;
-                hist[hist_offset + bin] += mag;
-            }
+            hist[hist_offset + low_bin] += low_vote;
+            hist[hist_offset + high_bin] += high_vote;
         }
     }
 }
