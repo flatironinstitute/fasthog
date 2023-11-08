@@ -5,9 +5,9 @@
 #include <iostream>
 #include <memory>
 
-#include <cpuid.h>
 
 #ifdef __x86_64__
+#include <cpuid.h>
 #include <afvec/vectorclass.h>
 #include <afvec/vectormath_trig.h>
 #endif
@@ -24,6 +24,7 @@ enum instruction_t : int { Scalar = 0, SSE4 = 1, AVX2 = 2, AVX512 = 3 };
 
 instruction_t get_current_capability() noexcept {
     instruction_t ilvl = Scalar;
+#ifdef __x86_64__
     unsigned eax, ebx, ecx, edx, flag = 0;
     int cpuidret = __get_cpuid(1, &eax, &ebx, &ecx, &edx);
 
@@ -43,7 +44,7 @@ instruction_t get_current_capability() noexcept {
 
     if (ebx & bit_AVX2)
         return AVX2;
-
+#endif
     return ilvl;
 }
 
