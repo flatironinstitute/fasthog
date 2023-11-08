@@ -1,15 +1,81 @@
 #include <hog.hpp>
 
 #include <cmath>
-#include <cstdio>
 #include <cstring>
+#include <iostream>
 #include <memory>
 
+#include <cpuid.h>
+
+#ifdef __x86_64__
 #include <afvec/vectorclass.h>
 #include <afvec/vectormath_trig.h>
+#endif
+
+namespace fasthog {
+template <typename Vec_t>
+void magnitude_orientation_impl(const double *__restrict gx, const double *__restrict gy, int N, int n_bins,
+                                bool signed_hist, double *__restrict magnitude, double *__restrict orientation);
 
 constexpr double eps = 1E-5;
 constexpr double eps2 = eps * eps;
+
+enum instruction_t : int { Scalar = 0, SSE4 = 1, AVX2 = 2, AVX512 = 3 };
+
+instruction_t get_current_capability() noexcept {
+    instruction_t ilvl = Scalar;
+    unsigned eax, ebx, ecx, edx, flag = 0;
+    int cpuidret = __get_cpuid(1, &eax, &ebx, &ecx, &edx);
+
+    if (!cpuidret)
+        return ilvl;
+
+    if (ecx & bit_SSE4_1)
+        ilvl = SSE4;
+
+    cpuidret = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx);
+
+    if (!cpuidret)
+        return ilvl;
+
+    if ((ebx & bit_AVX512F) && (ebx & bit_AVX512VL) && (ebx & bit_AVX512DQ))
+        return AVX512;
+
+    if (ebx & bit_AVX2)
+        return AVX2;
+
+    return ilvl;
+}
+
+instruction_t get_current_dispatch_target() noexcept {
+    const char *dispatch_c_str = std::getenv("FASTHOG_DISPATCH");
+    instruction_t user_requested_type = Scalar;
+
+    if (dispatch_c_str) {
+        std::string dispatch_str(dispatch_c_str);
+        for (auto &c : dispatch_str)
+            c = std::tolower(c);
+
+        if (dispatch_str == "scalar") {
+            user_requested_type = Scalar;
+        } else if (dispatch_str == "sse4") {
+            user_requested_type = SSE4;
+        } else if (dispatch_str == "avx2") {
+            user_requested_type = AVX2;
+        } else if (dispatch_str == "avx512") {
+            user_requested_type = AVX512;
+        }
+    }
+
+    instruction_t current_capability = get_current_capability();
+
+    if (dispatch_c_str && user_requested_type > current_capability)
+        std::cerr << "WARNING: FASTHOG_DISPATCH environment variable is set to " << dispatch_c_str
+                  << ", but the current CPU does not support " << dispatch_c_str << ".\n";
+
+    return dispatch_c_str ? user_requested_type : current_capability;
+}
+const instruction_t VEC_LEVEL = get_current_dispatch_target();
 
 void normalize_histogram(const double *unblocked, int n_cells_x, int n_cells_y, int block_size_x, int block_size_y,
                          int n_bins, NORM_TYPE norm_type, double *__restrict__ hist) {
@@ -129,28 +195,40 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
     }
 }
 
-void magnitude_orientation(const double *gx, const double *gy, int N, int n_bins, bool signed_hist, double *magnitude,
-                           double *orientation) {
-    double shift = signed_hist ? 2 * M_PI : M_PI;
-    double scale_factor = n_bins / shift;
+template <>
+void magnitude_orientation_impl<double>(const double *__restrict gx, const double *__restrict gy, int N, int n_bins,
+                                        bool signed_hist, double *__restrict magnitude,
+                                        double *__restrict orientation) {
+    const double shift = signed_hist ? 2 * M_PI : M_PI;
+    const double scale_factor = n_bins / shift;
 
-    int n_trunc = 4 * (N / 4);
-    for (int i = 0; i < n_trunc; i += 4) {
-        Vec4d GX, GY, MAG, ORIENTATION;
-        GX.load(gx + i);
-        GY.load(gy + i);
-        MAG = sqrt(GX * GX + GY * GY);
-        ORIENTATION = atan2(GY, GX);
-        ORIENTATION = scale_factor * if_add(ORIENTATION < 0, ORIENTATION, shift);
-        MAG.store(magnitude + i);
-        ORIENTATION.store(orientation + i);
-    }
-
-    for (int i = n_trunc; i < N; ++i) {
+    for (int i = 0; i < N; ++i) {
         magnitude[i] = sqrt(gx[i] * gx[i] + gy[i] * gy[i]);
         orientation[i] = atan2(gy[i], gx[i]);
         orientation[i] = scale_factor * (orientation[i] < 0 ? orientation[i] : orientation[i] + shift);
     }
+}
+
+void magnitude_orientation(const double *gx, const double *gy, int N, int n_bins, bool signed_hist, double *magnitude,
+                           double *orientation) {
+#ifdef __x86_64__
+    switch (VEC_LEVEL) {
+    case Scalar:
+        magnitude_orientation_impl<double>(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+        return;
+    case SSE4:
+        magnitude_orientation_impl<Vec2d>(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+        return;
+    case AVX2:
+        magnitude_orientation_impl<Vec4d>(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+        return;
+    case AVX512:
+        magnitude_orientation_impl<Vec8d>(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+        return;
+    }
+#else
+    magnitude_orientation_impl<double>(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+#endif
 }
 
 void gradient(const double *img, int nrows, int ncols, double *gx, double *gy) {
@@ -169,10 +247,11 @@ void gradient(const double *img, int nrows, int ncols, double *gx, double *gy) {
         gy[(nrows - 1) * ncols + x] = img[(nrows - 2) * ncols + x] - img[(nrows - 1) * ncols + x];
     }
 }
+} // namespace fasthog
 
 extern "C" {
-void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int block_size_x, int block_size_y,
-         int n_bins, bool signed_hist, NORM_TYPE norm_type, double *hist) {
+void fasthog_hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int block_size_x,
+                 int block_size_y, int n_bins, bool signed_hist, NORM_TYPE norm_type, double *hist) {
     const int N_pixels = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
     const int n_cells_y = nrows / cell_size_y;
@@ -185,6 +264,7 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
     double *magnitude = mempool + 2 * N_pixels;
     double *orientation = mempool + 3 * N_pixels;
     double *unblocked_hist = mempool + 4 * N_pixels;
+    using namespace fasthog;
 
     gradient(img, nrows, ncols, gx, gy);
     magnitude_orientation(gx, gy, N_pixels, n_bins, signed_hist, magnitude, orientation);
@@ -195,9 +275,9 @@ void hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size
     delete[] mempool;
 }
 
-void hog_from_gradient(const double *gx, const double *gy, int ncols, int nrows, int cell_size_x, int cell_size_y,
-                       int block_size_x, int block_size_y, int n_bins, bool signed_hist, NORM_TYPE norm_type,
-                       double *hist) {
+void fasthog_hog_from_gradient(const double *gx, const double *gy, int ncols, int nrows, int cell_size_x,
+                               int cell_size_y, int block_size_x, int block_size_y, int n_bins, bool signed_hist,
+                               NORM_TYPE norm_type, double *hist) {
     const int N_pixels = nrows * ncols;
     const int n_cells_x = ncols / cell_size_x;
     const int n_cells_y = nrows / cell_size_y;
@@ -208,6 +288,7 @@ void hog_from_gradient(const double *gx, const double *gy, int ncols, int nrows,
     double *magnitude = mempool + 0 * N_pixels;
     double *orientation = mempool + 1 * N_pixels;
     double *unblocked_hist = mempool + 2 * N_pixels;
+    using namespace fasthog;
 
     magnitude_orientation(gx, gy, N_pixels, n_bins, signed_hist, magnitude, orientation);
     build_histogram(magnitude, orientation, nrows, ncols, cell_size_y, cell_size_x, n_bins, unblocked_hist);

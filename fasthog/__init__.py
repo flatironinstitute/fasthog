@@ -30,7 +30,7 @@ if not _hog_path:
 
 _libhog = _CDLL(_hog_path)
 
-_hog = _libhog.hog
+_hog = _libhog.fasthog_hog
 _hog.restype = _c_void_p
 _hog.argtypes = [
     _POINTER(_c_double),
@@ -46,7 +46,7 @@ _hog.argtypes = [
     _POINTER(_c_double)
 ]
 
-_hog_from_gradient = _libhog.hog_from_gradient
+_hog_from_gradient = _libhog.fasthog_hog_from_gradient
 _hog_from_gradient.restype = _c_void_p
 _hog_from_gradient.argtypes = [
     _POINTER(_c_double),
