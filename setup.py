@@ -6,13 +6,13 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 setup(name='fasthog',
-      version='0.1.5',
+      version='0.1.6',
       description='Reasonably fast implementation of HOG descriptor calculation',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='Robert Blackwell',
       author_email='rblackwell@flatironinstitute.org',
-      url='https://github.com/blackwer/fasthog',
+      url='https://github.com/flatironinstitute/fasthog',
       packages=['fasthog'],
       package_dir={'fasthog': 'fasthog'},
       install_requires=['numpy'],
