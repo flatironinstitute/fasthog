@@ -206,7 +206,7 @@ void magnitude_orientation_impl<double>(const double *__restrict gx, const doubl
     for (int i = 0; i < N; ++i) {
         magnitude[i] = sqrt(gx[i] * gx[i] + gy[i] * gy[i]);
         orientation[i] = atan2(gy[i], gx[i]);
-        orientation[i] = scale_factor * (orientation[i] < 0 ? orientation[i] : orientation[i] + shift);
+        orientation[i] = scale_factor * (orientation[i] < 0 ? orientation[i] + shift : orientation[i]);
     }
 }
 
