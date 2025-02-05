@@ -6,7 +6,7 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 setup(name='fasthog',
-      version='0.1.6',
+      version='0.1.7',
       description='Reasonably fast implementation of HOG descriptor calculation',
       long_description=long_description,
       long_description_content_type='text/markdown',
