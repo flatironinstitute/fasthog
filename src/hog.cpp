@@ -1,8 +1,10 @@
 #include <hog.hpp>
 
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 
@@ -190,6 +192,10 @@ void build_histogram(const double *magnitude, const double *orientation, int nro
             if (high_bin >= n_bins)
                 high_bin = 0;
 
+            assert(low_bin >= 0 && low_bin < n_bins);
+            assert(high_bin >= 0 && high_bin < n_bins);
+            assert(hist_offset + low_bin >= 0 && hist_offset + low_bin < n_cells_x * n_cells_y * n_bins);
+            assert(hist_offset + high_bin >= 0 && hist_offset + high_bin < n_cells_x * n_cells_y * n_bins);
             hist[hist_offset + low_bin] += low_vote;
             hist[hist_offset + high_bin] += high_vote;
         }
@@ -251,6 +257,15 @@ void gradient(const double *img, int nrows, int ncols, double *gx, double *gy) {
 } // namespace fasthog
 
 extern "C" {
+void fasthog_gradient(const double *img, int ncols, int nrows, double *gx, double *gy) {
+    fasthog::gradient(img, nrows, ncols, gx, gy);
+}
+
+void fasthog_magnitude_orientation(const double *gx, const double *gy, int N, int n_bins, bool signed_hist,
+                                   double *magnitude, double *orientation) {
+    fasthog::magnitude_orientation(gx, gy, N, n_bins, signed_hist, magnitude, orientation);
+}
+
 void fasthog_hog(const double *img, int ncols, int nrows, int cell_size_x, int cell_size_y, int block_size_x,
                  int block_size_y, int n_bins, bool signed_hist, NORM_TYPE norm_type, double *hist) {
     const int N_pixels = nrows * ncols;
